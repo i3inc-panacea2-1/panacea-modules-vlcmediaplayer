@@ -25,6 +25,9 @@ using System.Globalization;
 using Panacea.Modularity.Media;
 using Panacea.Core;
 using Panacea.Modularity.VlcMediaPlayer;
+using Panacea.Modularity.Media.Channels;
+using System.Reflection;
+using Panacea.Modularity;
 
 namespace Panacea.Modules.VlcMediaPlayer
 {
@@ -33,18 +36,10 @@ namespace Panacea.Modules.VlcMediaPlayer
     /// </summary>
     public partial class VlcMediaPlayerControl : IMediaPlayerPlugin
     {
-        #region private members
-
-        private List<Type> _supportedTypes = new List<Type>()
-        {
-            typeof (IPTVChannel),
-            typeof (DVBTChannel),
-            typeof (FileChannel)
-        };
-        private bool _initialized = false;
-        string _processPath = Path.Combine(Utils.Path(), "Plugins\\Vlc\\", "VlcMediaPlayer.exe");
+        string _processPath = Path.Combine(
+            Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
+            "VlcProcess.exe");
         TcpProcessInteropServer _pipe;
-        #endregion private members
 
         public VlcMediaPlayerControl(PanaceaServices core)
         {
@@ -52,23 +47,33 @@ namespace Panacea.Modules.VlcMediaPlayer
             _core = core;
         }
 
-        public Task BeginInit()
+
+        public bool CanPlayChannel(object channel)
+        {
+            return new List<Type>()
+            {
+                typeof (IptvMedia),
+                typeof (DvbtMedia)
+            }.Contains(channel.GetType());
+        }
+
+        Task IPlugin.BeginInit()
         {
             return Task.CompletedTask;
         }
 
-        bool _isSeekable;
-        public override bool IsSeekable => _isSeekable;
+        public bool IsSeekable { get; private set; }
+        public bool HasSubtitles { get; private set; }
 
         private MediaItem _currentChannel;
 
         Process _process;
 
 
-        public async override Task Play(MediaItem channel)
+        public async void Play(MediaItem channel)
         {
             var plugin = _core.PluginLoader.GetPlugins<IVlcBinariesPlugin>().FirstOrDefault();
-            if(plugin == null)
+            if (plugin == null)
             {
                 Error?.Invoke(this, new Exception("No VLC binaries plugin found"));
                 return;
@@ -80,13 +85,11 @@ namespace Panacea.Modules.VlcMediaPlayer
             IsPlaying = true;
             HasSubtitles = false;
             IsPlaying = false;
-            OnNavigatableChanged(false);
 
             CleanUp();
-            SetupPipe();
+            await SetupPipe();
             OnOpening();
             var pipe = _pipe;
-            _logger.Debug(this, "initialize");
             var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
             if (res == null && pipe == _pipe)
             {
@@ -103,7 +106,6 @@ namespace Panacea.Modules.VlcMediaPlayer
                 return;
             }
             if (_pipe != pipe) return;
-            _logger.Debug(this, "play");
             await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
         }
 
@@ -136,7 +138,7 @@ namespace Panacea.Modules.VlcMediaPlayer
         }
 
         CancellationTokenSource _cts;
-        protected void SetupPipe()
+        protected async Task SetupPipe()
         {
             try
             {
@@ -150,7 +152,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                         if (bool.TryParse(args[0].ToString(), out bool res))
                         {
                             HasSubtitles = res;
-                            OnSubtitlesChanged(HasSubtitles);
+                            OnHasSubtitlesChanged(HasSubtitles);
                         }
                     }), DispatcherPriority.Background);
                 });
@@ -160,8 +162,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                     {
                         if (TimeSpan.TryParse(args[0].ToString(), out TimeSpan res))
                         {
-                            _duration = res;
-                            OnDuarationChanged(_duration);
+                            OnDurationChanged(res);
                         }
                     });
                 });
@@ -169,9 +170,9 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        if (float.TryParse(args[0].ToString(), 
+                        if (float.TryParse(args[0].ToString(),
                             NumberStyles.Float,
-                            CultureInfo.InvariantCulture, 
+                            CultureInfo.InvariantCulture,
                             out float res))
                         {
                             _position = res;
@@ -193,8 +194,8 @@ namespace Panacea.Modules.VlcMediaPlayer
                     {
                         if (int.TryParse(args[0].ToString(), out int res))
                         {
-                            _isSeekable = res == 1;
-                            OnSeekableChanged(_isSeekable);
+                            IsSeekable = res == 1;
+                            OnIsSeekableChanged(IsSeekable);
                         }
                     });
                 });
@@ -206,16 +207,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                         OnNowPlaying(args != null ? args[0].ToString() : "");
                     });
                 });
-                _pipe.Subscribe("navigatable", args =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        if (bool.TryParse(args[0].ToString(), out bool res))
-                        {
-                            OnNavigatableChanged(res);
-                        }
-                    });
-                });
+
                 _pipe.Subscribe("stopped", args =>
                 {
                     Dispatcher.Invoke(() =>
@@ -273,17 +265,11 @@ namespace Panacea.Modules.VlcMediaPlayer
                         }
                     });
                 });
-                _pipe.Subscribe("cc", args =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        OnSubtitlesTitlesChanged((args[0] as List<object>) != null ? (args[0] as List<object>).Select(i => i.ToString()).ToList() : new List<string>());
-                    });
-                });
+                
                 _process = Process.Start(_processPath, _pipe.ConnectionId);
                 _process.WaitForInputIdle();
                 _process.BindToCurrentProcess();
-                if (_pipe.Connect())
+                if (await _pipe.ConnectAsync(15000))
                 {
                     _pipe.Start();
                 }
@@ -312,9 +298,9 @@ namespace Panacea.Modules.VlcMediaPlayer
             }
         }
 
-        public override async void SetSubtitles(string title)
+        public async void SetSubtitles(bool val)
         {
-            await SendToSubProcess("set-subtitles", title);
+            await SendToSubProcess("set-subtitles", val ? "1" : "-1");
         }
 
         protected async Task SendToSubProcess(string command, params object[] payload)
@@ -331,7 +317,7 @@ namespace Panacea.Modules.VlcMediaPlayer
         }
 
         static object _lock = new object();
-        public override void Stop()
+        public void Stop()
         {
             lock (_lock)
             {
@@ -344,41 +330,31 @@ namespace Panacea.Modules.VlcMediaPlayer
             OnStopped();
         }
 
-        public override async void Pause()
+        public async void Pause()
         {
             await SendToSubProcess("pause", "");
         }
 
-        public override ReadOnlyCollection<Type> SupportedChannels
-        {
-            get { return _supportedTypes.AsReadOnly(); }
-        }
 
-        public override bool IsPlaying
+        public bool IsPlaying
         {
             get;
             protected set;
         }
 
-        TimeSpan _duration;
-        public override TimeSpan Duration
-        {
-            get { return _duration; }
-        }
-
         bool _pausable;
-        public override bool IsPausable
+        public bool IsPausable
         {
             get { return _pausable; }
         }
 
-        public override async void Play()
+        public async void Play()
         {
             await SendToSubProcess("play", "");
 
         }
 
-        public override void Dispose()
+        public void Dispose()
         {
 
         }
@@ -386,7 +362,7 @@ namespace Panacea.Modules.VlcMediaPlayer
         float _position;
         private readonly PanaceaServices _core;
 
-        public override float Position
+        public float Position
         {
             get { return _position; }
             set
@@ -396,33 +372,31 @@ namespace Panacea.Modules.VlcMediaPlayer
             }
         }
 
-        public override bool HasNext
+        public bool HasNext
         {
             get { return true; }
         }
 
-        public override bool HasPrevious
+        public bool HasPrevious
         {
             get { return true; }
         }
 
-        public override async void Next()
+        public async void Next()
         {
             await SendToSubProcess("next", "");
         }
 
-        public override async void Previous()
+        public async void Previous()
         {
             await SendToSubProcess("previous", "");
         }
 
-        private async void FormsHost_OnLoaded(object sender, RoutedEventArgs e)
+        private void FormsHost_OnLoaded(object sender, RoutedEventArgs e)
         {
-            if (_initialized) return;
-            _initialized = true;
             if (_currentChannel != null)
             {
-                await Play(_currentChannel);
+                //Play(_currentChannel);
             }
         }
 
@@ -431,7 +405,7 @@ namespace Panacea.Modules.VlcMediaPlayer
             OnClick();
         }
 
-        public override async void NextSubtitle()
+        public async void NextSubtitle()
         {
             await SendToSubProcess("next-subtitle", "");
         }
@@ -449,6 +423,110 @@ namespace Panacea.Modules.VlcMediaPlayer
         private void Panel_Click(object sender, EventArgs e)
         {
             OnClick();
+        }
+
+        public event EventHandler Click;
+        protected void OnClick()
+        {
+            Click?.Invoke(this, null);
+        }
+
+        public event EventHandler Stopped;
+        protected void OnStopped()
+        {
+            Stopped?.Invoke(this, null);
+        }
+
+        public event EventHandler<Exception> Error;
+        protected void OnError(Exception ex)
+        {
+            Error?.Invoke(this, ex);
+        }
+
+        public event EventHandler Paused;
+        protected void OnPaused()
+        {
+            Paused?.Invoke(this, null);
+        }
+
+        public event EventHandler<float> PositionChanged;
+        protected void OnPositionChanged(float e)
+        {
+            PositionChanged?.Invoke(this, e);
+        }
+
+        public event EventHandler Ended;
+        protected void OnEnded()
+        {
+            Ended?.Invoke(this, null);
+        }
+
+        public event EventHandler Playing;
+        protected void OnPlaying()
+        {
+            Playing?.Invoke(this, null);
+        }
+
+        public event EventHandler<string> NowPlaying;
+        protected void OnNowPlaying(string str)
+        {
+            NowPlaying?.Invoke(this, str);
+        }
+
+        public event EventHandler<int> ChapterChanged;
+        protected void OnChapterChanged(int i)
+        {
+            ChapterChanged?.Invoke(this, i);
+        }
+
+        public event EventHandler Opening;
+        protected void OnOpening()
+        {
+            Opening?.Invoke(this, null);
+        }
+
+        public event EventHandler<bool> HasSubtitlesChanged;
+        protected void OnHasSubtitlesChanged(bool val)
+        {
+            HasSubtitles = val;
+            HasSubtitlesChanged?.Invoke(this, val);
+        }
+
+        public TimeSpan Duration { get; private set; }
+
+        public FrameworkElement VideoControl => this;
+
+        public event EventHandler<TimeSpan> DurationChanged;
+        protected void OnDurationChanged(TimeSpan duration)
+        {
+            Duration = duration;
+            DurationChanged?.Invoke(this, duration);
+        }
+
+        public event EventHandler<bool> IsSeekableChanged;
+        public event EventHandler<bool> HasNextChanged;
+        public event EventHandler<bool> HasPreviousChanged;
+        public event EventHandler IsPausableChanged;
+
+        protected void OnIsSeekableChanged(bool seek)
+        {
+            IsSeekable = seek;
+            IsSeekableChanged?.Invoke(this, seek);
+        }
+
+        public bool HasMoreChapters()
+        {
+            return false;
+        }
+
+        Task IPlugin.EndInit()
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task Shutdown()
+        {
+            return Task.CompletedTask;
         }
     }
 }

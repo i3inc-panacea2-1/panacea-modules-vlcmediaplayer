@@ -51,7 +51,7 @@ namespace VlcMediaPlayer
                     Shutdown();
                     return;
                 }
-
+                //MessageBox.Show("edw");
                 var source = new TaskCompletionSource<object>();
                 var handleSource = new TaskCompletionSource<object>();
                 bool exited = false;
@@ -59,12 +59,11 @@ namespace VlcMediaPlayer
                 client.Register("initialize", async payload =>
                 {
                     if (exited) return null;
+                  
                     source = new TaskCompletionSource<object>();
                     var path = payload[0].ToString();
                     var arguments = payload[1].ToString().Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                    //MessageBox.Show(arguments);
-                    
-                   
+
                     bool init = false;
                     await Dispatcher.BeginInvoke(new Action(() =>
                     {
