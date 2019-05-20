@@ -22,13 +22,16 @@ using System.IO.Pipes;
 using Panacea.Interop;
 
 using System.Globalization;
+using Panacea.Modularity.Media;
+using Panacea.Core;
+using Panacea.Modularity.VlcMediaPlayer;
 
 namespace Panacea.Modules.VlcMediaPlayer
 {
     /// <summary>
     /// Interaction logic for VlcMediaPlayer.xaml
     /// </summary>
-    public partial class VlcMediaPlayerControl : MediaPlayerBase
+    public partial class VlcMediaPlayerControl : IMediaPlayerPlugin
     {
         #region private members
 
@@ -42,46 +45,38 @@ namespace Panacea.Modules.VlcMediaPlayer
         string _processPath = Path.Combine(Utils.Path(), "Plugins\\Vlc\\", "VlcMediaPlayer.exe");
         TcpProcessInteropServer _pipe;
         #endregion private members
-        ILogger _logger;
-        IPluginIntercommunicationManager _pluginIntercommunicationManager;
-        public VlcMediaPlayer(IPluginIntercommunicationManager pluginComm, ILogger logger)
+
+        public VlcMediaPlayerControl(PanaceaServices core)
         {
             InitializeComponent();
-            _pluginIntercommunicationManager = pluginComm;
-            _logger = logger;
+            _core = core;
         }
 
-        public override Task Init()
+        public Task BeginInit()
         {
-            _pluginIntercommunicationManager.RegisterHandler("VlcBinaries", OnVlcBinaries);
             return Task.CompletedTask;
-        }
-        string _binariesPath;
-        void OnVlcBinaries(object sender, Dictionary<string, object> args)
-        {
-            _binariesPath = args["path"].ToString();
         }
 
         bool _isSeekable;
         public override bool IsSeekable => _isSeekable;
 
-        private Channel _currentChannel;
+        private MediaItem _currentChannel;
 
         Process _process;
 
-        public async override Task Play(Channel channel)
-        {
 
-            Debug.WriteLine("play");
-            _currentChannel = channel;
-            if (!_initialized) return;
-            if (_binariesPath == null)
+        public async override Task Play(MediaItem channel)
+        {
+            var plugin = _core.PluginLoader.GetPlugins<IVlcBinariesPlugin>().FirstOrDefault();
+            if(plugin == null)
             {
-                var error = "No Vlc path set. Please, load at least 1 'Vlc.Binaries' plugin";
-                OnError(new Exception(error));
-                _logger.Error(this, error);
+                Error?.Invoke(this, new Exception("No VLC binaries plugin found"));
                 return;
             }
+            var binariesPath = plugin.GetBinariesPath();
+
+            _currentChannel = channel;
+
             IsPlaying = true;
             HasSubtitles = false;
             IsPlaying = false;
@@ -92,7 +87,7 @@ namespace Panacea.Modules.VlcMediaPlayer
             OnOpening();
             var pipe = _pipe;
             _logger.Debug(this, "initialize");
-            var res = await pipe.CallAsync("initialize", _binariesPath, (Utils.StartupArgs["vlc-params"] ?? ""));
+            var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
             if (res == null && pipe == _pipe)
             {
                 OnError(new Exception());
@@ -100,7 +95,6 @@ namespace Panacea.Modules.VlcMediaPlayer
                 return;
             }
             if (_pipe != pipe) return;
-            _logger.Debug(this, "handle");
             res = await _pipe.CallAsync("handle", pictureBox.Handle);
             if (res == null && pipe == _pipe)
             {
@@ -390,6 +384,8 @@ namespace Panacea.Modules.VlcMediaPlayer
         }
 
         float _position;
+        private readonly PanaceaServices _core;
+
         public override float Position
         {
             get { return _position; }
