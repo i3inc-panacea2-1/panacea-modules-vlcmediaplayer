@@ -109,6 +109,10 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PreBuildEvent>"$(MSBuildBinPath)\MSBuild.exe" "$(SolutionDir)VlcProcess\VlcProcess.csproj" /t:Rebuild /p:Configuration=$(configuration)</PreBuildEvent>
+    <PreBuildEvent>
+    </PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>"$(MSBuildBinPath)\MSBuild.exe" "$(SolutionDir)VlcProcess\VlcProcess.csproj" /t:Rebuild /p:Configuration=$(configuration)</PostBuildEvent>
   </PropertyGroup>
 </Project>
