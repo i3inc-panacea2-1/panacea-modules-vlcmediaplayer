@@ -72,41 +72,48 @@ namespace Panacea.Modules.VlcMediaPlayer
 
         public async void Play(MediaItem channel)
         {
-            var plugin = _core.PluginLoader.GetPlugins<IVlcBinariesPlugin>().FirstOrDefault();
-            if (plugin == null)
+            try
             {
-                Error?.Invoke(this, new Exception("No VLC binaries plugin found"));
-                return;
-            }
-            var binariesPath = plugin.GetBinariesPath();
+                var plugin = _core.PluginLoader.GetPlugins<IVlcBinariesPlugin>().FirstOrDefault();
+                if (plugin == null)
+                {
+                    Error?.Invoke(this, new Exception("No VLC binaries plugin found"));
+                    return;
+                }
+                var binariesPath = plugin.GetBinariesPath();
 
-            _currentChannel = channel;
+                _currentChannel = channel;
 
-            IsPlaying = true;
-            HasSubtitles = false;
-            IsPlaying = false;
+                IsPlaying = true;
+                HasSubtitles = false;
+                IsPlaying = false;
 
-            CleanUp();
-            await SetupPipe();
-            OnOpening();
-            var pipe = _pipe;
-            var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
-            if (res == null && pipe == _pipe)
-            {
-                OnError(new Exception());
                 CleanUp();
-                return;
+                await SetupPipe();
+                OnOpening();
+                var pipe = _pipe;
+                var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
+                if (res == null && pipe == _pipe)
+                {
+                    OnError(new Exception());
+                    CleanUp();
+                    return;
+                }
+                if (_pipe != pipe) return;
+                res = await _pipe.CallAsync("handle", pictureBox.Handle);
+                if (res == null && pipe == _pipe)
+                {
+                    OnError(new Exception());
+                    CleanUp();
+                    return;
+                }
+                if (_pipe != pipe) return;
+                await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
             }
-            if (_pipe != pipe) return;
-            res = await _pipe.CallAsync("handle", pictureBox.Handle);
-            if (res == null && pipe == _pipe)
+            catch (Exception ex)
             {
-                OnError(new Exception());
-                CleanUp();
-                return;
+                OnError(ex);
             }
-            if (_pipe != pipe) return;
-            await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
         }
 
         protected void CleanUp()
@@ -265,7 +272,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                         }
                     });
                 });
-                
+
                 _process = Process.Start(_processPath, _pipe.ConnectionId);
                 _process.WaitForInputIdle();
                 _process.BindToCurrentProcess();
