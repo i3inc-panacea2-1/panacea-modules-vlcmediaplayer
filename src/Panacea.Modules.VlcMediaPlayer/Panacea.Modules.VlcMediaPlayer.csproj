@@ -88,7 +88,7 @@
       <Version>8.0.1</Version>
     </PackageReference>
     <PackageReference Include="Panacea.Interop">
-      <Version>0.0.4</Version>
+      <Version>0.0.5</Version>
     </PackageReference>
     <PackageReference Include="Panacea.Models">
       <Version>0.0.5</Version>
@@ -97,7 +97,7 @@
       <Version>3.0.3</Version>
     </PackageReference>
     <PackageReference Include="Panacea.Modularity.VlcMediaPlayer">
-      <Version>0.0.1</Version>
+      <Version>0.0.2</Version>
     </PackageReference>
     <PackageReference Include="Panacea.Multilinguality">
       <Version>1.0.1</Version>
