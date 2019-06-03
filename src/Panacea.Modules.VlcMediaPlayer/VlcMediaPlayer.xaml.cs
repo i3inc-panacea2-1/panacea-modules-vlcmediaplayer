@@ -90,6 +90,8 @@ namespace Panacea.Modules.VlcMediaPlayer
 
                 CleanUp();
                 await SetupPipe();
+                HasNextChanged?.Invoke(this, false);
+                HasPreviousChanged?.Invoke(this, false);
                 OnOpening();
                 var pipe = _pipe;
                 var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
@@ -214,7 +216,14 @@ namespace Panacea.Modules.VlcMediaPlayer
                         OnNowPlaying(args != null ? args[0].ToString() : "");
                     });
                 });
-
+                _pipe.Subscribe("navigatable", args =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        HasNextChanged?.Invoke(this, bool.Parse(args[0].ToString()));
+                        HasPreviousChanged?.Invoke(this, bool.Parse(args[0].ToString()));
+                    });
+                });
                 _pipe.Subscribe("stopped", args =>
                 {
                     Dispatcher.Invoke(() =>
