@@ -55,7 +55,7 @@ namespace VlcMediaPlayer
                 var source = new TaskCompletionSource<object>();
                 var handleSource = new TaskCompletionSource<object>();
                 bool exited = false;
-                client = new TcpProcessInteropClient("localhost", int.Parse(e.Args[0]));
+                client = new TcpProcessInteropClient(int.Parse(e.Args[0]));
                 client.Register("initialize", async payload =>
                 {
                     if (exited) return null;
