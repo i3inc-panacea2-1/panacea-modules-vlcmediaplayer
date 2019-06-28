@@ -47,6 +47,7 @@ namespace Panacea.Modules.VlcMediaPlayer
             _core = core;
         }
 
+        public event EventHandler<bool> IsPausableChanged;
 
         public bool CanPlayChannel(object channel)
         {
@@ -262,6 +263,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                     {
                         _pausable = args[0].ToString() == "1";
                         if (IsPlaying) OnPlaying();
+                        IsPausableChanged?.Invoke(this, _pausable);
                     });
                 });
                 _pipe.Subscribe("chapter", args =>
@@ -522,7 +524,6 @@ namespace Panacea.Modules.VlcMediaPlayer
         public event EventHandler<bool> IsSeekableChanged;
         public event EventHandler<bool> HasNextChanged;
         public event EventHandler<bool> HasPreviousChanged;
-        public event EventHandler IsPausableChanged;
 
         protected void OnIsSeekableChanged(bool seek)
         {
