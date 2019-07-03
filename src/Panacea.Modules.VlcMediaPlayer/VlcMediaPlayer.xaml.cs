@@ -325,6 +325,7 @@ namespace Panacea.Modules.VlcMediaPlayer
         {
             try
             {
+                if (_pipe == null) return;
                 await _pipe.PublishAsync(command, payload);
             }
             catch (Exception ex)
