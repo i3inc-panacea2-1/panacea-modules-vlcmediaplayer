@@ -258,7 +258,7 @@ namespace VlcMediaPlayer
 
         void SetupPlayer()
         {
-            //_vlc.VideoProperties.SetDeinterlaceMode(VlcDeinterlaceModes.Blend);
+            _vlc.VideoProperties.SetDeinterlaceMode(VlcDeinterlaceModes.Blend);
             _vlc.VideoProperties.AspectRatio = "16:9";
             _vlc.PositionChanged += async (sender, args) =>
             {

@@ -221,8 +221,10 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        HasNextChanged?.Invoke(this, bool.Parse(args[0].ToString()));
-                        HasPreviousChanged?.Invoke(this, bool.Parse(args[0].ToString()));
+                        bool val = bool.Parse(args[0].ToString());
+                        HasNext = HasPrevious = val;
+                        HasNextChanged?.Invoke(this, val);
+                        HasPreviousChanged?.Invoke(this, val);
                     });
                 });
                 _pipe.Subscribe("stopped", args =>
@@ -393,12 +395,12 @@ namespace Panacea.Modules.VlcMediaPlayer
 
         public bool HasNext
         {
-            get { return true; }
+            get; set;
         }
 
         public bool HasPrevious
         {
-            get { return true; }
+            get; set;
         }
 
         public async void Next()
