@@ -98,7 +98,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                 var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
                 if (res == null && pipe == _pipe)
                 {
-                    OnError(new Exception());
+                    OnError(new Exception("Could not initialize"));
                     CleanUp();
                     return;
                 }
@@ -106,7 +106,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                 res = await _pipe.CallAsync("handle", pictureBox.Handle);
                 if (res == null && pipe == _pipe)
                 {
-                    OnError(new Exception());
+                    OnError(new Exception("Could not set handle"));
                     CleanUp();
                     return;
                 }
@@ -155,6 +155,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                 Debug.WriteLine("setup");
                 _pipe = new TcpProcessInteropServer(0);
                 _pipe.Closed += _pipe_Closed;
+                _pipe.Error += _pipe_Error;
                 _pipe.Subscribe("has-subtitles", args =>
                 {
                     Dispatcher.BeginInvoke(new Action(() =>
@@ -247,7 +248,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        OnError(new Exception());
+                        OnError(new Exception("Error from subprocess"));
                     });
                     CleanUp();
                 });
@@ -295,7 +296,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                 }
                 else
                 {
-                    OnError(new Exception());
+                    OnError(new Exception("Pipe did not connect"));
                 }
             }
             catch (ObjectDisposedException)
@@ -304,9 +305,10 @@ namespace Panacea.Modules.VlcMediaPlayer
             }
         }
 
-        private void _pipe_Closed(object sender, EventArgs e)
+        private void _pipe_Error(object sender, Exception e)
         {
             _pipe.Closed -= _pipe_Closed;
+            _pipe.Error -= _pipe_Error;
             var pipe = sender as TcpProcessInteropServer;
             if (pipe != null)
             {
@@ -314,8 +316,24 @@ namespace Panacea.Modules.VlcMediaPlayer
             }
             if (IsPlaying)
             {
-                Dispatcher.Invoke(() => OnError(new Exception()));
+                Dispatcher.Invoke(() => OnError(new Exception(e.Message)));
             }
+        }
+
+        private void _pipe_Closed(object sender, EventArgs e)
+        {
+            _pipe.Closed -= _pipe_Closed;
+            _pipe.Error -= _pipe_Error;
+            var pipe = sender as TcpProcessInteropServer;
+            if (pipe != null)
+            {
+                CleanUp();
+            }
+            if (IsPlaying)
+            {
+                Dispatcher.Invoke(() => OnError(new Exception("Pipe closed")));
+            }
+
         }
 
         public async void SetSubtitles(bool val)
