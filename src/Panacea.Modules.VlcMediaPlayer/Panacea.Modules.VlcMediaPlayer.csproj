@@ -109,6 +109,6 @@
     </PreBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
-    <PostBuildEvent>"$(MSBuildBinPath)\MSBuild.exe" "$(SolutionDir)VlcProcess\VlcProcess.csproj" /t:Rebuild /p:Configuration=$(configuration) /p:Platform=$(platform) /p:OutputPath=$(OutputPath)</PostBuildEvent>
+    <PostBuildEvent>"$(MSBuildBinPath)\MSBuild.exe" "$(ProjectDir)..\VlcProcess\VlcProcess.csproj" /t:Rebuild /p:Configuration=$(configuration) /p:Platform=$(platform) /p:OutputPath=$(OutputPath)</PostBuildEvent>
   </PropertyGroup>
 </Project>
