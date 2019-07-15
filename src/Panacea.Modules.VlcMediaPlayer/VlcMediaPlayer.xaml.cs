@@ -91,27 +91,30 @@ namespace Panacea.Modules.VlcMediaPlayer
 
                 CleanUp();
                 await SetupPipe();
-                HasNextChanged?.Invoke(this, false);
-                HasPreviousChanged?.Invoke(this, false);
-                OnOpening();
-                var pipe = _pipe;
-                var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
-                if (res == null && pipe == _pipe)
+                if (_pipe != null)
                 {
-                    OnError(new Exception("Could not initialize"));
-                    CleanUp();
-                    return;
+                    HasNextChanged?.Invoke(this, false);
+                    HasPreviousChanged?.Invoke(this, false);
+                    OnOpening();
+                    var pipe = _pipe;
+                    var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
+                    if (res == null && pipe == _pipe)
+                    {
+                        OnError(new Exception("Could not initialize"));
+                        CleanUp();
+                        return;
+                    }
+                    if (_pipe != pipe) return;
+                    res = await _pipe.CallAsync("handle", pictureBox.Handle);
+                    if (res == null && pipe == _pipe)
+                    {
+                        OnError(new Exception("Could not set handle"));
+                        CleanUp();
+                        return;
+                    }
+                    if (_pipe != pipe) return;
+                    await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
                 }
-                if (_pipe != pipe) return;
-                res = await _pipe.CallAsync("handle", pictureBox.Handle);
-                if (res == null && pipe == _pipe)
-                {
-                    OnError(new Exception("Could not set handle"));
-                    CleanUp();
-                    return;
-                }
-                if (_pipe != pipe) return;
-                await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
             }
             catch (Exception ex)
             {
@@ -290,13 +293,16 @@ namespace Panacea.Modules.VlcMediaPlayer
                 _process = Process.Start(_processPath, _pipe.ConnectionId);
                 _process.WaitForInputIdle();
                 _process.BindToCurrentProcess();
-                if (await _pipe.ConnectAsync(15000))
+                if (_pipe != null)
                 {
-                    _pipe.Start();
-                }
-                else
-                {
-                    OnError(new Exception("Pipe did not connect"));
+                    if (await _pipe.ConnectAsync(15000))
+                    {
+                        _pipe?.Start();
+                    }
+                    else
+                    {
+                        OnError(new Exception("Pipe did not connect"));
+                    }
                 }
             }
             catch (ObjectDisposedException)
@@ -307,11 +313,12 @@ namespace Panacea.Modules.VlcMediaPlayer
 
         private void _pipe_Error(object sender, Exception e)
         {
-            _pipe.Closed -= _pipe_Closed;
-            _pipe.Error -= _pipe_Error;
             var pipe = sender as TcpProcessInteropServer;
             if (pipe != null)
             {
+                pipe.Closed -= _pipe_Closed;
+                pipe.Error -= _pipe_Error;
+
                 CleanUp();
             }
             if (IsPlaying)
