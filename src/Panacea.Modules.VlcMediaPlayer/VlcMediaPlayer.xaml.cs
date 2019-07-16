@@ -88,14 +88,14 @@ namespace Panacea.Modules.VlcMediaPlayer
                 IsPlaying = true;
                 HasSubtitles = false;
                 IsPlaying = false;
-
+                OnOpening();
                 CleanUp();
                 await SetupPipe();
                 if (_pipe != null)
                 {
                     HasNextChanged?.Invoke(this, false);
                     HasPreviousChanged?.Invoke(this, false);
-                    OnOpening();
+                    
                     var pipe = _pipe;
                     var res = await pipe.CallAsync("initialize", binariesPath, /*(Utils.StartupArgs["vlc-params"] ?? */ "");
                     if (res == null && pipe == _pipe)
@@ -155,160 +155,164 @@ namespace Panacea.Modules.VlcMediaPlayer
         {
             try
             {
-                Debug.WriteLine("setup");
-                _pipe = new TcpProcessInteropServer(0);
-                _pipe.Closed += _pipe_Closed;
-                _pipe.Error += _pipe_Error;
-                _pipe.Subscribe("has-subtitles", args =>
+                await Task.Run(async() =>
                 {
-                    Dispatcher.BeginInvoke(new Action(() =>
+                    Debug.WriteLine("setup");
+                    _pipe = new TcpProcessInteropServer(0);
+                    _pipe.Closed += _pipe_Closed;
+                    _pipe.Error += _pipe_Error;
+                    _pipe.Subscribe("has-subtitles", args =>
                     {
-                        if (bool.TryParse(args[0].ToString(), out bool res))
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
-                            HasSubtitles = res;
-                            OnHasSubtitlesChanged(HasSubtitles);
-                        }
-                    }), DispatcherPriority.Background);
-                });
-                _pipe.Subscribe("duration", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                            if (bool.TryParse(args[0].ToString(), out bool res))
+                            {
+                                HasSubtitles = res;
+                                OnHasSubtitlesChanged(HasSubtitles);
+                            }
+                        }), DispatcherPriority.Background);
+                    });
+                    _pipe.Subscribe("duration", args =>
                     {
-                        if (TimeSpan.TryParse(args[0].ToString(), out TimeSpan res))
+                        Dispatcher.Invoke(() =>
                         {
-                            OnDurationChanged(res);
-                        }
+                            if (TimeSpan.TryParse(args[0].ToString(), out TimeSpan res))
+                            {
+                                OnDurationChanged(res);
+                            }
+                        });
                     });
-                });
-                _pipe.Subscribe("position", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("position", args =>
                     {
-                        if (float.TryParse(args[0].ToString(),
-                            NumberStyles.Float,
-                            CultureInfo.InvariantCulture,
-                            out float res))
+                        Dispatcher.Invoke(() =>
                         {
-                            _position = res;
-                            OnPositionChanged(_position);
-                        }
+                            if (float.TryParse(args[0].ToString(),
+                                NumberStyles.Float,
+                                CultureInfo.InvariantCulture,
+                                out float res))
+                            {
+                                _position = res;
+                                OnPositionChanged(_position);
+                            }
+                        });
                     });
-                });
-                _pipe.Subscribe("playing", args =>
-                {
-                    Dispatcher.BeginInvoke(new Action(() =>
+                    _pipe.Subscribe("playing", args =>
                     {
-                        IsPlaying = true;
-                        OnPlaying();
-                    }), DispatcherPriority.Background);
-                });
-                _pipe.Subscribe("seekable", args =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        if (int.TryParse(args[0].ToString(), out int res))
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
-                            IsSeekable = res == 1;
-                            OnIsSeekableChanged(IsSeekable);
-                        }
+                            IsPlaying = true;
+                            OnPlaying();
+                        }), DispatcherPriority.Background);
                     });
-                });
-                _pipe.Subscribe("nowplaying", args =>
-                {
-                    if (args.Length == 0) return;
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("seekable", args =>
                     {
-                        OnNowPlaying(args != null ? args[0].ToString() : "");
+                        Dispatcher.Invoke(() =>
+                        {
+                            if (int.TryParse(args[0].ToString(), out int res))
+                            {
+                                IsSeekable = res == 1;
+                                OnIsSeekableChanged(IsSeekable);
+                            }
+                        });
                     });
-                });
-                _pipe.Subscribe("navigatable", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("nowplaying", args =>
                     {
-                        bool val = bool.Parse(args[0].ToString());
-                        HasNext = HasPrevious = val;
-                        HasNextChanged?.Invoke(this, val);
-                        HasPreviousChanged?.Invoke(this, val);
+                        if (args.Length == 0) return;
+                        Dispatcher.Invoke(() =>
+                        {
+                            OnNowPlaying(args != null ? args[0].ToString() : "");
+                        });
                     });
-                });
-                _pipe.Subscribe("stopped", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("navigatable", args =>
                     {
-                        IsPlaying = false;
-                        OnStopped();
+                        Dispatcher.Invoke(() =>
+                        {
+                            bool val = bool.Parse(args[0].ToString());
+                            HasNext = HasPrevious = val;
+                            HasNextChanged?.Invoke(this, val);
+                            HasPreviousChanged?.Invoke(this, val);
+                        });
                     });
-                });
-                _pipe.Subscribe("ended", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("stopped", args =>
                     {
-                        IsPlaying = false;
-                        OnEnded();
+                        Dispatcher.Invoke(() =>
+                        {
+                            IsPlaying = false;
+                            OnStopped();
+                        });
                     });
-                });
-                _pipe.Subscribe("error", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("ended", args =>
                     {
-                        OnError(new Exception("Error from subprocess"));
+                        Dispatcher.Invoke(() =>
+                        {
+                            IsPlaying = false;
+                            OnEnded();
+                        });
                     });
-                    CleanUp();
-                });
-                _pipe.Subscribe("paused", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("error", args =>
                     {
-                        IsPlaying = false;
-                        OnPaused();
+                        Dispatcher.Invoke(() =>
+                        {
+                            OnError(new Exception("Error from subprocess"));
+                        });
+                        CleanUp();
                     });
-                });
-                _pipe.Subscribe("pausable", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("paused", args =>
                     {
-                        _pausable = args[0].ToString() == "1";
-                        if (IsPlaying) OnPlaying();
-                        IsPausableChanged?.Invoke(this, _pausable);
+                        Dispatcher.Invoke(() =>
+                        {
+                            IsPlaying = false;
+                            OnPaused();
+                        });
                     });
-                });
-                _pipe.Subscribe("chapter", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("pausable", args =>
                     {
+                        Dispatcher.Invoke(() =>
+                        {
+                            _pausable = args[0].ToString() == "1";
+                            if (IsPlaying) OnPlaying();
+                            IsPausableChanged?.Invoke(this, _pausable);
+                        });
+                    });
+                    _pipe.Subscribe("chapter", args =>
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
 
+                        });
                     });
-                });
-                _pipe.Subscribe("chapterchanged", args =>
-                {
-                    Dispatcher.Invoke(() =>
+                    _pipe.Subscribe("chapterchanged", args =>
                     {
-                        if (int.TryParse(args[0].ToString(), out int res))
+                        Dispatcher.Invoke(() =>
                         {
-                            OnChapterChanged(res);
-                        }
+                            if (int.TryParse(args[0].ToString(), out int res))
+                            {
+                                OnChapterChanged(res);
+                            }
+                        });
                     });
-                });
 
-                _process = Process.Start(_processPath, _pipe.ConnectionId);
-                _process.WaitForInputIdle();
-                _process.BindToCurrentProcess();
-                if (_pipe != null)
-                {
-                    if (await _pipe.ConnectAsync(15000))
+                    _process = Process.Start(_processPath, _pipe.ConnectionId);
+                    _process.WaitForInputIdle();
+                    _process.BindToCurrentProcess();
+                    if (_pipe != null)
                     {
-                        _pipe?.Start();
+                        if (await _pipe.ConnectAsync(15000))
+                        {
+                            _pipe?.Start();
+                        }
+                        else
+                        {
+                            OnError(new Exception("Pipe did not connect"));
+                        }
                     }
-                    else
-                    {
-                        OnError(new Exception("Pipe did not connect"));
-                    }
-                }
+                });
             }
             catch (ObjectDisposedException)
             {
                 //disposed before process attached
             }
+
         }
 
         private void _pipe_Error(object sender, Exception e)
