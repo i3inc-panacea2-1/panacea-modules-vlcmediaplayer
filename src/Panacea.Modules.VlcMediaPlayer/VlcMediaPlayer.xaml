@@ -7,28 +7,31 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     d:DesignHeight="300"
     d:DesignWidth="300"
-    mc:Ignorable="d" Background="Black">
+    Background="Black"
+    mc:Ignorable="d">
     <Grid>
         <WindowsFormsHost
             Name="FormsHost"
             Background="Black"
-            Loaded="FormsHost_OnLoaded"
-            PreviewMouseDown="FormsHost_PreviewMouseDown">
+            Loaded="FormsHost_OnLoaded">
 
             <forms:Form
                 x:Name="pictureBox"
-                BackColor="Black"
+                BackColor="black"
                 Click="pictureBox_Click"
                 Dock="Fill"
                 FormBorderStyle="None"
                 MouseDown="pictureBox_MouseDown"
                 TopLevel="False">
                 <forms:Form.Controls>
-                    <forms:Panel
-                        BackColor="Transparent"
-                        BorderStyle="None"
+                    
+                    <forms:PictureBox
+                        
+                        x:Name="CaptureMousePanel"
+                        BackColor="transparent"
                         Click="Panel_Click"
                         Dock="Fill" />
+
                 </forms:Form.Controls>
             </forms:Form>
 

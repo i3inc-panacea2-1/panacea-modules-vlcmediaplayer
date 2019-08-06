@@ -41,7 +41,7 @@ namespace VlcMediaPlayer
         }
 
         TcpProcessInteropClient client;
-
+        string[] _arguments;
         private async void Application_Startup(object sender, StartupEventArgs e)
         {
             try
@@ -56,59 +56,59 @@ namespace VlcMediaPlayer
                 var handleSource = new TaskCompletionSource<object>();
                 bool exited = false;
                 client = new TcpProcessInteropClient(int.Parse(e.Args[0]));
-                client.Register("initialize", async payload =>
+                client.Register("initialize", payload =>
                 {
+                    //MessageBox.Show("init");
                     if (exited) return null;
-                  
+
                     source = new TaskCompletionSource<object>();
                     var path = payload[0].ToString();
-                    var arguments = payload[1].ToString().Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    _arguments = payload[1].ToString().Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
                     bool init = false;
-                    await Dispatcher.BeginInvoke(new Action(() =>
+                    if (!File.Exists(Path.Combine(path, "libvlc.dll")))
                     {
-                        if (!File.Exists(Path.Combine(path,  "libvlc.dll")))
-                        {
-                            Current.Shutdown();
-                        }
-                        var pluginsPath = Path.Combine(path,"plugins");
-                        VlcContext.LibVlcDllsPath = path;
-                        VlcContext.LibVlcPluginsPath = pluginsPath;
+                        Current.Shutdown();
+                        return null;
+                    }
+                    
+                    var pluginsPath = Path.Combine(path, "plugins");
+                    VlcContext.LibVlcDllsPath = path;
+                    VlcContext.LibVlcPluginsPath = pluginsPath;
 
-                        VlcContext.StartupOptions.IgnoreConfig = true;
-                        VlcContext.StartupOptions.LogOptions.LogInFile = false;
-                        VlcContext.StartupOptions.LogOptions.ShowLoggerConsole = false;
-                        VlcContext.StartupOptions.LogOptions.Verbosity = VlcLogVerbosities.None;
-                        VlcContext.StartupOptions.AddOption("--input-timeshift-granularity=0");
-                        VlcContext.StartupOptions.AddOption("--auto-preparse");
-                        VlcContext.StartupOptions.AddOption("--album-art=0");
-                        //VlcContext.StartupOptions.AddOption("--overlay=1");
-                        //VlcContext.StartupOptions.AddOption("--deinterlace=-1");
-                        //VlcContext.StartupOptions.AddOption("--network-caching=1500");
+                    VlcContext.StartupOptions.IgnoreConfig = true;
+                    VlcContext.StartupOptions.LogOptions.LogInFile = false;
+                    VlcContext.StartupOptions.LogOptions.ShowLoggerConsole = false;
+                    VlcContext.StartupOptions.LogOptions.Verbosity = VlcLogVerbosities.None;
+                    VlcContext.StartupOptions.AddOption("--input-timeshift-granularity=0");
+                    VlcContext.StartupOptions.AddOption("--auto-preparse");
+                    VlcContext.StartupOptions.AddOption("--album-art=0");
+                    //VlcContext.StartupOptions.AddOption("--overlay=1");
+                    //VlcContext.StartupOptions.AddOption("--deinterlace=-1");
+                    //VlcContext.StartupOptions.AddOption("--network-caching=1500");
 
 
-                        foreach (var arg in arguments)
-                        {
-                            try
-                            {
-                                VlcContext.StartupOptions.AddOption(arg.ToString());
-                            }
-                            catch
-                            {
-                            }
-                        }
+                    foreach (var arg in _arguments)
+                    {
                         try
                         {
-                            VlcContext.Initialize();
-                            init = true;
+                            //MessageBox.Show(arg);
+                            VlcContext.StartupOptions.AddOption(arg.ToString());
                         }
-                        catch (Exception ex)
+                        catch
                         {
-                            //MessageBox.Show(ex.Message);
-                            Application.Current.Shutdown();
                         }
-
-                    }));
+                    }
+                    try
+                    {
+                        VlcContext.Initialize();
+                        init = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        //MessageBox.Show(ex.Message);
+                        Application.Current.Shutdown();
+                    }
                     source.SetResult(null);
                     return init ? new object[] { } : null;
 
@@ -149,18 +149,21 @@ namespace VlcMediaPlayer
                     {
                         _duration = TimeSpan.FromSeconds(0);
                         var split = args[0].ToString().Split(" ".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                        //var split2 = _arguments.ToString().Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                         _currentMedia = new LocationMedia(split[0]);
                         SetHandlersForMedia(_currentMedia);
-                        _vlc.Media = _currentMedia;
 
+                        _vlc.Media = _currentMedia;
                         if (split.Length > 1)
                         {
                             foreach (var extra in split.Skip(1))
                             {
+                                //MessageBox.Show(extra);
                                 _currentMedia.AddOption(extra);
                             }
 
                         }
+
                     }
                     else
                     {
