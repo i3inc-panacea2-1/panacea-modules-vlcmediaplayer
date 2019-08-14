@@ -17,7 +17,7 @@ using Vlc.DotNet.Core.Interops.Signatures.LibVlc.Media;
 using Vlc.DotNet.Core.Medias;
 using Vlc.DotNet.Forms;
 
-namespace VlcMediaPlayer
+namespace VlcProcess
 {
     /// <summary>
     /// Interaction logic for App.xaml
@@ -42,8 +42,10 @@ namespace VlcMediaPlayer
 
         TcpProcessInteropClient client;
         string[] _arguments;
-        private async void Application_Startup(object sender, StartupEventArgs e)
+
+        protected override async void OnStartup(StartupEventArgs e)
         {
+            base.OnStartup(e);
             try
             {
                 if (e.Args.Length == 0)
@@ -71,7 +73,7 @@ namespace VlcMediaPlayer
                         Current.Shutdown();
                         return null;
                     }
-                    
+
                     var pluginsPath = Path.Combine(path, "plugins");
                     VlcContext.LibVlcDllsPath = path;
                     VlcContext.LibVlcPluginsPath = pluginsPath;
@@ -104,7 +106,7 @@ namespace VlcMediaPlayer
                         VlcContext.Initialize();
                         init = true;
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
                         //MessageBox.Show(ex.Message);
                         Application.Current.Shutdown();

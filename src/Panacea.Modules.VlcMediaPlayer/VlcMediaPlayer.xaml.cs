@@ -28,6 +28,7 @@ using Panacea.Modularity.VlcMediaPlayer;
 using Panacea.Modularity.Media.Channels;
 using System.Reflection;
 using Panacea.Modularity;
+using System.ComponentModel;
 
 namespace Panacea.Modules.VlcMediaPlayer
 {
@@ -152,9 +153,17 @@ namespace Panacea.Modules.VlcMediaPlayer
 
                 if (_process != null && !_process.HasExited)
                 {
-                    _process.Kill();
-                    _process.Dispose();
-                    _process = null;
+                    try
+                    {
+                        _process.Kill();
+                        _process.Dispose();
+                       
+                    }
+                    catch { }
+                    finally
+                    {
+                        _process = null;
+                    }
                 }
             }
         }
@@ -355,7 +364,14 @@ namespace Panacea.Modules.VlcMediaPlayer
                     {
                         _process = Process.Start(_processPath, _pipe.ConnectionId);
                         _process.WaitForInputIdle(5000);
-                        _process.BindToCurrentProcess();
+                        try
+                        {
+                            _process.BindToCurrentProcess();
+                        }
+                        catch (Win32Exception)
+                        {
+                            if (Debugger.IsAttached) return;
+                        }
                     }
                 });
                 if (_pipe != null)
@@ -368,7 +384,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                     }
                     else
                     {
-                        OnError(new Exception("Pipe did not connect"));
+                        throw new Exception("Pipe did not connect");
                     }
                 }
 
