@@ -354,7 +354,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                     lock (_lock)
                     {
                         _process = Process.Start(_processPath, _pipe.ConnectionId);
-                        _process.WaitForInputIdle();
+                        _process.WaitForInputIdle(5000);
                         _process.BindToCurrentProcess();
                     }
                 });
