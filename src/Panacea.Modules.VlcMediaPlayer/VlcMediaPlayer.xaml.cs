@@ -35,8 +35,10 @@ namespace Panacea.Modules.VlcMediaPlayer
     /// <summary>
     /// Interaction logic for VlcMediaPlayer.xaml
     /// </summary>
-    public partial class VlcMediaPlayerControl : IMediaPlayerPlugin
+    public partial class VlcMediaPlayerControl : IMediaPlayerPlugin, IMediaPlayer
     {
+        public IMediaPlayer GetMediaPlayer() => this;
+
         string _processPath = Path.Combine(
             Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
             "VlcProcess.exe");
@@ -53,7 +55,7 @@ namespace Panacea.Modules.VlcMediaPlayer
 
         public event EventHandler<bool> IsPausableChanged;
 
-        public bool CanPlayChannel(object channel)
+        public bool CanPlayChannel(MediaItem channel)
         {
             return new List<Type>()
             {
@@ -75,10 +77,11 @@ namespace Panacea.Modules.VlcMediaPlayer
         Process _process;
 
 
-        public async void Play(MediaItem channel)
+        public async Task Play(MediaItem channel)
         {
             try
             {
+                
                 var plugin = _core.PluginLoader.GetPlugins<IVlcBinariesPlugin>().FirstOrDefault();
                 if (plugin == null)
                 {
@@ -93,37 +96,44 @@ namespace Panacea.Modules.VlcMediaPlayer
                 IsPlaying = false;
                 OnOpening();
                 CleanUp();
+                _cts = new CancellationTokenSource();
+                var cts = _cts;
                 await SetupPipe();
-
+                if (cts.IsCancellationRequested) return;
                 if (_pipe != null)
                 {
                     HasNextChanged?.Invoke(this, false);
                     HasPreviousChanged?.Invoke(this, false);
 
-                    var pipe = _pipe;
-                    var res = await pipe.CallAsync("initialize", binariesPath, VlcParameters);
+                   
+                    var res = await _pipe.CallAsync("initialize", binariesPath, VlcParameters);
+                    if (cts.IsCancellationRequested) return;
                     //CaptureMousePanel.BringToFront();
-                    if (res == null && pipe == _pipe)
+                    if (res == null)
                     {
                         OnError(new Exception("Could not initialize"));
                         CleanUp();
                         return;
                     }
-                    if (_pipe != pipe) return;
+                    
                     res = await _pipe.CallAsync("handle", pictureBox.Handle);
-                    if (res == null && pipe == _pipe)
+                    if (cts.IsCancellationRequested) return;
+                    if (res == null)
                     {
                         OnError(new Exception("Could not set handle"));
                         CleanUp();
                         return;
                     }
-                    if (_pipe != pipe) return;
                     await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
                 }
                 else
                 {
                     throw new Exception("Pipe not connected");
                 }
+            }
+            catch(AggregateException ex)
+            {
+                if (ex.InnerException is ObjectDisposedException) return;
             }
             catch (Exception ex)
             {
