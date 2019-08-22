@@ -94,7 +94,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                 IsPlaying = true;
                 HasSubtitles = false;
                 IsPlaying = false;
-                OnOpening();
+                
                 CleanUp();
                 _cts = new CancellationTokenSource();
                 var cts = _cts;
@@ -124,6 +124,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                         CleanUp();
                         return;
                     }
+                    OnOpening();
                     await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
                 }
                 else
