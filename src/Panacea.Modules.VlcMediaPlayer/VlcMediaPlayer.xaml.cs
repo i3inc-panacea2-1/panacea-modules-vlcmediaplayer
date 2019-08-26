@@ -124,8 +124,9 @@ namespace Panacea.Modules.VlcMediaPlayer
                         CleanUp();
                         return;
                     }
-                    OnOpening();
+                   
                     await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
+                    OnOpening();
                 }
                 else
                 {
