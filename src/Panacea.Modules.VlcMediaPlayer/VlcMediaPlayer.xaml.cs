@@ -50,7 +50,7 @@ namespace Panacea.Modules.VlcMediaPlayer
             _core = core;
         }
 
-        [PanaceaInject("VlcParameters", "Parameters to pass to the VLC subprocess. Make sure that the parameters are valid for the VlcBinaries plugin that will be loaded.", "VlcParameters=\"--vout=direct3d9\" --visual-80-bands=1")]
+        [PanaceaInject("VlcParameters", "Parameters to pass to the VLC subprocess. Make sure that the parameters are valid for the VlcBinaries plugin that will be loaded.", "VlcParameters=\"--vout=direct3d9 --visual-80-bands=1\"")]
         protected string VlcParameters { get; set; } = "";
 
         public event EventHandler<bool> IsPausableChanged;
