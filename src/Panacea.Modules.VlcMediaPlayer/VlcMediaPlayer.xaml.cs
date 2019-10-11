@@ -456,6 +456,7 @@ namespace Panacea.Modules.VlcMediaPlayer
         static readonly object _lock = new object();
         public void Stop()
         {
+
             lock (_lock)
             {
                 IsPlaying = false;
