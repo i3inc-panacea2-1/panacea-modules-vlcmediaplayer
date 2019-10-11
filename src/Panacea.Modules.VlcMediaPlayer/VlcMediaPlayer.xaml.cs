@@ -76,12 +76,12 @@ namespace Panacea.Modules.VlcMediaPlayer
 
         Process _process;
 
-
+        bool _opening = false;
         public async Task Play(MediaItem channel)
         {
             try
             {
-                
+                _opening = true;
                 var plugin = _core.PluginLoader.GetPlugins<IVlcBinariesPlugin>().FirstOrDefault();
                 if (plugin == null)
                 {
@@ -140,6 +140,10 @@ namespace Panacea.Modules.VlcMediaPlayer
             catch (Exception ex)
             {
                 OnError(ex);
+            }
+            finally
+            {
+                _opening = false;
             }
         }
 
@@ -456,7 +460,7 @@ namespace Panacea.Modules.VlcMediaPlayer
         static readonly object _lock = new object();
         public void Stop()
         {
-
+            if (!IsPlaying && !_opening) return;
             lock (_lock)
             {
                 IsPlaying = false;
