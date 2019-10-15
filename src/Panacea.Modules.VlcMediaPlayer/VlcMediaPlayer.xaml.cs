@@ -126,7 +126,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                     }
                    
                     await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
-                    OnOpening();
+             
                 }
                 else
                 {
@@ -143,7 +143,7 @@ namespace Panacea.Modules.VlcMediaPlayer
             }
             finally
             {
-                _opening = false;
+                
             }
         }
 
@@ -152,6 +152,7 @@ namespace Panacea.Modules.VlcMediaPlayer
             _connected = false;
             lock (_lock)
             {
+                Debug.WriteLine("Cleanup");
                 if (_cts != null)
                 {
                     _cts.Cancel();
@@ -191,7 +192,13 @@ namespace Panacea.Modules.VlcMediaPlayer
             {
                 _pipe = new TcpProcessInteropServer(0);
                 _pipe.Closed += _pipe_Closed;
+                _pipe.Subscribe("opening", args=>{
 
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        OnOpening();
+                    }), DispatcherPriority.Background);
+                });
                 _pipe.Subscribe("has-subtitles", args =>
                 {
                     Dispatcher.BeginInvoke(new Action(() =>
@@ -294,6 +301,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                     {
                         Dispatcher.Invoke(() =>
                         {
+                            _opening = false;
                             IsPlaying = false;
                             OnStopped();
                         });
@@ -306,6 +314,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                     {
                         Dispatcher.Invoke(() =>
                         {
+                            _opening = false;
                             IsPlaying = false;
                             OnEnded();
                         });
@@ -318,6 +327,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                     {
                         Dispatcher.Invoke(() =>
                         {
+                            _opening = false;
                             OnError(new Exception("Error from subprocess"));
                         });
                     }
@@ -460,6 +470,8 @@ namespace Panacea.Modules.VlcMediaPlayer
         static readonly object _lock = new object();
         public void Stop()
         {
+            Debug.WriteLine(IsPlaying);
+            Debug.WriteLine(_opening);
             if (!IsPlaying && !_opening) return;
             lock (_lock)
             {

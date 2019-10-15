@@ -399,6 +399,9 @@ namespace VlcProcess
                         }
                         await Send("playing", "");
                         break;
+                    case States.Opening:
+                        await Send("opening");
+                        break;
                 }
             }), DispatcherPriority.Background);
         }
