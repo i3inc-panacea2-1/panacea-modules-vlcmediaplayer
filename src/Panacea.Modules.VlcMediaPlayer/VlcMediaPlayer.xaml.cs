@@ -42,7 +42,7 @@ namespace Panacea.Modules.VlcMediaPlayer
         string _processPath = Path.Combine(
             Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
             "VlcProcess.exe");
-        TcpProcessInteropServer _pipe;
+
 
         public VlcMediaPlayerControl(PanaceaServices core)
         {
@@ -74,7 +74,7 @@ namespace Panacea.Modules.VlcMediaPlayer
 
         private MediaItem _currentChannel;
 
-        Process _process;
+
 
         bool _opening = false;
         public async Task Play(MediaItem channel)
@@ -94,19 +94,19 @@ namespace Panacea.Modules.VlcMediaPlayer
                 IsPlaying = true;
                 HasSubtitles = false;
                 IsPlaying = false;
-                
+
                 CleanUp();
                 _cts = new CancellationTokenSource();
                 var cts = _cts;
-                await SetupPipe();
+                await SetupPipe(cts);
                 if (cts.IsCancellationRequested) return;
-                if (_pipe != null)
+                if (_subProcess != null)
                 {
                     HasNextChanged?.Invoke(this, false);
                     HasPreviousChanged?.Invoke(this, false);
 
-                   
-                    var res = await _pipe.CallAsync("initialize", binariesPath, VlcParameters);
+
+                    var res = await _subProcess.Pipe.CallAsync("initialize", binariesPath, VlcParameters);
                     if (cts.IsCancellationRequested) return;
                     //CaptureMousePanel.BringToFront();
                     if (res == null)
@@ -115,8 +115,8 @@ namespace Panacea.Modules.VlcMediaPlayer
                         CleanUp();
                         return;
                     }
-                    
-                    res = await _pipe.CallAsync("handle", pictureBox.Handle);
+
+                    res = await _subProcess.Pipe.CallAsync("handle", pictureBox.Handle);
                     if (cts.IsCancellationRequested) return;
                     if (res == null)
                     {
@@ -124,16 +124,16 @@ namespace Panacea.Modules.VlcMediaPlayer
                         CleanUp();
                         return;
                     }
-                   
+
                     await SendToSubProcess("play", channel.GetMRL() + " " + channel.GetExtras());
-             
+
                 }
                 else
                 {
                     throw new Exception("Pipe not connected");
                 }
             }
-            catch(AggregateException ex)
+            catch (AggregateException ex)
             {
                 if (ex.InnerException is ObjectDisposedException) return;
             }
@@ -143,56 +143,41 @@ namespace Panacea.Modules.VlcMediaPlayer
             }
             finally
             {
-                
+
             }
         }
 
         protected void CleanUp()
         {
             _connected = false;
-            lock (_lock)
+
+            Debug.WriteLine("Cleanup");
+            if (_cts != null)
             {
-                Debug.WriteLine("Cleanup");
-                if (_cts != null)
-                {
-                    _cts.Cancel();
-                    _cts = null;
-                }
+                _cts.Cancel();
+                _cts = null;
+            }
 
-                if (_pipe != null)
-                {
-                    _pipe.ReleaseSubscriptions();
-                    _pipe.Closed -= _pipe_Closed;
-                    _pipe.Error -= _pipe_Error;
-                    _pipe.Dispose();
-                    _pipe = null;
-                }
-
-                if (_process != null && !_process.HasExited)
-                {
-                    try
-                    {
-                        _process.Kill();
-                        _process.Dispose();
-                       
-                    }
-                    catch { }
-                    finally
-                    {
-                        _process = null;
-                    }
-                }
+            if (_subProcess != null)
+            {
+                _subProcess.Pipe.Error -= _pipe_Error;
+                _subProcess.Pipe.Closed -= _pipe_Closed;
+                _subProcess.Dispose();
+                _subProcess = null;
             }
         }
-
+        SubProcessHelper _subProcess;
         CancellationTokenSource _cts;
-        protected async Task SetupPipe()
+        protected async Task SetupPipe(CancellationTokenSource cts)
         {
             try
             {
-                _pipe = new TcpProcessInteropServer(0);
+                _subProcess = new SubProcessHelper();
+                var _pipe = _subProcess.Pipe;
+
                 _pipe.Closed += _pipe_Closed;
-                _pipe.Subscribe("opening", args=>{
+                _pipe.Subscribe("opening", args =>
+                {
 
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
@@ -214,13 +199,13 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             if (TimeSpan.TryParse(args[0].ToString(), out TimeSpan res))
                             {
                                 OnDurationChanged(res);
                             }
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -228,7 +213,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             if (float.TryParse(args[0].ToString(),
                                 NumberStyles.Float,
@@ -238,7 +223,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                                 _position = res;
                                 OnPositionChanged(_position);
                             }
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -258,14 +243,14 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             if (int.TryParse(args[0].ToString(), out int res))
                             {
                                 IsSeekable = res == 1;
                                 OnIsSeekableChanged(IsSeekable);
                             }
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -274,10 +259,10 @@ namespace Panacea.Modules.VlcMediaPlayer
                     try
                     {
                         if (args.Length == 0) return;
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             OnNowPlaying(args != null ? args[0].ToString() : "");
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -285,13 +270,13 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             bool val = bool.Parse(args[0].ToString());
                             HasNext = HasPrevious = val;
                             HasNextChanged?.Invoke(this, val);
                             HasPreviousChanged?.Invoke(this, val);
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -299,12 +284,12 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             _opening = false;
                             IsPlaying = false;
                             OnStopped();
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -312,12 +297,12 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             _opening = false;
                             IsPlaying = false;
                             OnEnded();
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -325,11 +310,11 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             _opening = false;
                             OnError(new Exception("Error from subprocess"));
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                     CleanUp();
@@ -338,11 +323,11 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             IsPlaying = false;
                             OnPaused();
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -350,12 +335,12 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             _pausable = args[0].ToString() == "1";
                             if (IsPlaying) OnPlaying();
                             IsPausableChanged?.Invoke(this, _pausable);
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -363,10 +348,10 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
 
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
@@ -374,38 +359,26 @@ namespace Panacea.Modules.VlcMediaPlayer
                 {
                     try
                     {
-                        Dispatcher.Invoke(() =>
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
                             if (int.TryParse(args[0].ToString(), out int res))
                             {
                                 OnChapterChanged(res);
                             }
-                        });
+                        }));
                     }
                     catch (TaskCanceledException) { }
                 });
-                await Task.Run(() =>
+                await _subProcess.Start(_processPath);
+                if (cts.IsCancellationRequested) return;
+                if (_subProcess.Pipe != null)
                 {
-                    lock (_lock)
+                    var res = await _pipe.ConnectAsync(15000);
+                    if (cts.IsCancellationRequested) return;
+                    if (res)
                     {
-                        _process = Process.Start(_processPath, _pipe.ConnectionId);
-                        _process.WaitForInputIdle(5000);
-                        try
-                        {
-                            _process.BindToCurrentProcess();
-                        }
-                        catch (Win32Exception)
-                        {
-                            if (Debugger.IsAttached) return;
-                        }
-                    }
-                });
-                if (_pipe != null)
-                {
-                    if (await _pipe.ConnectAsync(15000))
-                    {
-                        _pipe.Error += _pipe_Error;
-                        _pipe?.Start();
+                        _subProcess.Pipe.Error += _pipe_Error;
+                        _subProcess.Pipe.Start();
                         _connected = true;
                     }
                     else
@@ -413,6 +386,7 @@ namespace Panacea.Modules.VlcMediaPlayer
                         throw new Exception("Pipe did not connect");
                     }
                 }
+
 
 
             }
@@ -432,7 +406,7 @@ namespace Panacea.Modules.VlcMediaPlayer
 
             if (IsPlaying)
             {
-                Dispatcher.Invoke(() => OnError(e));
+                Dispatcher.BeginInvoke(new Action(() => OnError(e)));
             }
         }
 
@@ -442,7 +416,7 @@ namespace Panacea.Modules.VlcMediaPlayer
             CleanUp();
             if (IsPlaying)
             {
-                Dispatcher.Invoke(() => OnError(new Exception("Pipe closed")));
+                Dispatcher.BeginInvoke(new Action(() => OnError(new Exception("Pipe closed"))));
             }
 
         }
@@ -456,9 +430,9 @@ namespace Panacea.Modules.VlcMediaPlayer
         {
             try
             {
-                if (_pipe == null || !_connected) return;
-
-                await _pipe.PublishAsync(command, payload);
+                if (_subProcess == null || !_connected) return;
+                _core.Logger.Debug(this, command);
+                await _subProcess.Pipe.PublishAsync(command, payload);
             }
             catch (Exception ex)
             {
@@ -467,17 +441,16 @@ namespace Panacea.Modules.VlcMediaPlayer
             }
         }
 
-        static readonly object _lock = new object();
+
         public void Stop()
         {
             Debug.WriteLine(IsPlaying);
             Debug.WriteLine(_opening);
             if (!IsPlaying && !_opening) return;
-            lock (_lock)
-            {
-                IsPlaying = false;
-                CleanUp();
-            }
+
+            IsPlaying = false;
+            CleanUp();
+
             OnStopped();
         }
 

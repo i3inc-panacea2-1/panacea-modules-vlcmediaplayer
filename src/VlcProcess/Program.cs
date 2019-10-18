@@ -12,7 +12,7 @@ namespace VlcProcess
         [STAThread]
         static void Main(string[] args)
         {
-            Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.AboveNormal;
+            //Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.AboveNormal;
             new App().Run();
         }
     }

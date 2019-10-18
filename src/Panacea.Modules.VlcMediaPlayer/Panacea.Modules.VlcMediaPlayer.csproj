@@ -88,6 +88,7 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="SubProcessHelper.cs" />
     <Compile Include="VlcMediaPlayer.xaml.cs">
       <DependentUpon>VlcMediaPlayer.xaml</DependentUpon>
     </Compile>
